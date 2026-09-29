@@ -1,0 +1,11 @@
+services:
+  proxy:
+    image: descargador-private-proxy:local
+    build: .
+    restart: unless-stopped
+    ports:
+      - "3129:3129"
+    volumes:
+      - ./secrets:/run/secrets:ro
+    mem_limit: 256m
+    pids_limit: 128
