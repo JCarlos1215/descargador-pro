@@ -2,8 +2,7 @@
 
 Requiere `brew install squid wstunnel cloudflared`. Ejecutar `Iniciar.command`
 con doble clic o desde Terminal. Mantener esa ventana abierta y la Mac encendida.
-Para detenerlo, pulsar Ctrl+C en esa ventana. No se instala un servicio de inicio
-ni se abren puertos del router. `caffeinate -i` evita el reposo por inactividad
+Para detenerlo, pulsar Ctrl+C en esa ventana. Este modo manual no instala un servicio de inicio. Tampoco se abren puertos del router. `caffeinate -i` evita el reposo por inactividad
 mientras está ejecutándose; no garantiza funcionamiento con la tapa cerrada.
 
 Squid escucha solamente en `127.0.0.1:13128` y permite túneles HTTPS al puerto
@@ -37,3 +36,27 @@ YouTube; para validar descargas hay que probar también un enlace de contenido.
 Si se desconecta la Mac, Render permanece público pero las descargas que usan
 el túnel fallarán. Eliminar `MAC_TUNNEL_URL`, `WSTUNNEL_HTTP_UPGRADE_PATH_PREFIX`
 y `YTDLP_PROXY` de Render permite volver a la conexión directa anterior.
+
+## Servicio persistente de macOS
+
+`python3 proxy/mac/install_service.py` instala el LaunchAgent del usuario
+`com.descargadorpro.privateproxy`. Arranca al iniciar sesión y permanece activo
+sin depender de una ventana de Terminal o de esta conversación. Mientras esté
+activo evita el reposo por inactividad. No es necesario abrir `Iniciar.command`
+si el servicio ya está funcionando.
+
+Sus registros están en `runtime/service.log` y `runtime/service-error.log`.
+Para detenerlo sin borrar archivos:
+
+```sh
+launchctl bootout gui/$(id -u)/com.descargadorpro.privateproxy
+```
+
+Para volver a cargarlo:
+
+```sh
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.descargadorpro.privateproxy.plist
+```
+
+Cada reinicio del túnel requiere actualizar su dirección en Render; la clave
+permanece igual. La Mac debe seguir encendida, con sesión iniciada y conexión.

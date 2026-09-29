@@ -5,3 +5,5 @@ cookies.txt
 .env
 downloads
 .DS_Store
+
+proxy/mac/runtime/
