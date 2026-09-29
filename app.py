@@ -1,6 +1,7 @@
 import os
 import shutil
 import tempfile
+from collections import deque
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -21,14 +22,31 @@ def health():
     return jsonify({'status': 'ok'})
 
 
-def download_error(error):
-    message = str(error).lower()
+class DownloadLogger:
+    """Keep provider warnings per request: the final exception can hide them."""
+
+    def __init__(self):
+        self.warnings = deque(maxlen=20)
+
+    def debug(self, message):
+        app.logger.debug('%s', message)
+
+    def warning(self, message):
+        self.warnings.append(str(message))
+        app.logger.warning('%s', message)
+
+    def error(self, message):
+        app.logger.error('%s', message)
+
+
+def download_error(error, warnings=()):
+    message = '\n'.join([str(error), *warnings]).lower()
+    if 'http error 429' in message or 'too many requests' in message:
+        return 'El sitio está limitando las solicitudes desde este servidor (429). Espera antes de reintentar. Si persiste, el administrador debe revisar el acceso desde Render.'
     if any(text in message for text in ('not a bot', 'confirm you’re', "confirm you're", 'sign in', 'login required')):
         return 'YouTube solicita iniciar sesión o bloqueó la IP del servidor. El administrador debe revisar las cookies y el acceso desde Render.'
-    if '429' in message or 'too many requests' in message:
-        return 'El sitio limitó las descargas del servidor. Inténtalo más tarde.'
-    if '403' in message:
-        return 'El sitio rechazó el acceso desde el servidor (403). Inténtalo más tarde o utiliza otro enlace.'
+    if 'http error 403' in message or '403: forbidden' in message:
+        return 'El sitio rechazó el acceso desde este servidor (403). El administrador debe revisar el acceso desde Render.'
     if any(text in message for text in ('unavailable', 'private video', 'removed', 'not available')):
         return 'El contenido no está disponible, es privado o tiene restricciones de acceso.'
     if 'unsupported url' in message:
@@ -60,8 +78,10 @@ def download():
         return jsonify(error='Falta FFmpeg en el servidor. El administrador debe actualizar el despliegue.'), 503
 
     workdir = Path(tempfile.mkdtemp(prefix='descargador-'))
+    logger = DownloadLogger()
     try:
         options = {
+            'logger': logger,
             'outtmpl': str(workdir / 'media.%(ext)s'),
             'noplaylist': True,
             'socket_timeout': 30,
@@ -99,7 +119,7 @@ def download():
         return response
     except yt_dlp.utils.DownloadError as error:
         app.logger.exception('El proveedor rechazó la descarga')
-        message, code = download_error(error), 502
+        message, code = download_error(error, logger.warnings), 502
     except Exception:
         app.logger.exception('Fallo al procesar la descarga')
         message, code = 'Error interno al procesar la descarga. Revisa los registros del servidor.', 500

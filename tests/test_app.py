@@ -43,6 +43,24 @@ class DownloadTests(unittest.TestCase):
                 self.assertFalse(directory.exists())
 
     @patch('app.shutil.which', return_value='/usr/bin/ffmpeg')
+    def test_hidden_provider_warnings(self, _):
+        for warning, expected in (
+            ('Unable to download webpage: HTTP Error 429: Too Many Requests', '(429)'),
+            ('Unable to download API page: HTTP Error 403: Forbidden', '(403)'),
+        ):
+            with self.subTest(warning=warning), patch('app.yt_dlp.YoutubeDL') as factory:
+                def extract(url, download):
+                    logger = factory.call_args.args[0]['logger']
+                    logger.warning(warning)
+                    raise DownloadError('Failed to extract any player response')
+                factory.return_value.__enter__.return_value.extract_info.side_effect = extract
+                response = self.client.post('/download', json={'url': 'https://example.com/video', 'format': 'mp3'})
+                self.assertEqual(response.status_code, 502)
+                self.assertIn(expected, response.json['error'])
+                self.assertFalse(Path(factory.call_args.args[0]['outtmpl']).parent.exists())
+        self.assertNotIn('(429)', module.download_error('Failed to extract any player response'))
+
+    @patch('app.shutil.which', return_value='/usr/bin/ffmpeg')
     def test_provider_error_and_cleanup(self, _):
         with patch('app.yt_dlp.YoutubeDL') as factory:
             factory.return_value.__enter__.return_value.extract_info.side_effect = DownloadError("Sign in to confirm you're not a bot")
