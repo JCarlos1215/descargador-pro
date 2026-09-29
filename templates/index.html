@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Descargador Pro</title>
     <style>
-        body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background: #f0f2f5; margin: 0; }
-        .card { background: white; padding: 2rem; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); text-align: center; width: 400px; }
+        body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #f0f2f5; margin: 0; }
+        .card { background: white; padding: 2rem; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); text-align: center; width: min(400px, calc(100vw - 5rem)); }
         input { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
         select { width: 100%; padding: 10px; margin: 10px 0; border-radius: 5px; }
         button { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; width: 100%; font-size: 16px; }
@@ -24,12 +24,12 @@
             <option value="mp3">Audio (MP3)</option>
         </select>
         <button id="btn">Descargar</button>
-        <div id="status"></div>
+        <div id="status" role="status" aria-live="polite"></div>
     </div>
 
     <script>
         document.getElementById('btn').onclick = async () => {
-            const url = document.getElementById('url').value;
+            const url = document.getElementById('url').value.trim();
             const format = document.getElementById('format').value;
             const status = document.getElementById('status');
             const btn = document.getElementById('btn');
@@ -51,13 +51,19 @@
                     const downloadUrl = window.URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = downloadUrl;
-                    a.download = `archivo.${format}`;
+                    const disposition = response.headers.get('Content-Disposition') || '';
+                    const filename = disposition.match(/filename="?([^";]+)"?/i);
+                    a.download = filename ? filename[1] : `archivo.${format}`;
                     document.body.appendChild(a);
                     a.click();
                     a.remove();
+                    setTimeout(() => window.URL.revokeObjectURL(downloadUrl), 60000);
                     status.innerText = "¡Descarga completada!";
                 } else {
-                    status.innerText = "Error al descargar. Verifica el link.";
+                    const error = await response.json().catch(() => null);
+                    status.innerText = error?.error || (response.status === 504
+                        ? "La descarga tardó demasiado. Intenta con un archivo más corto."
+                        : `El servidor no pudo completar la descarga (${response.status}). Inténtalo más tarde.`);
                 }
             } catch (e) {
                 status.innerText = "Error de conexión.";
