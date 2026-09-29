@@ -23,6 +23,7 @@ def download():
 
     ydl_opts = {
         'outtmpl': f'{DOWNLOAD_FOLDER}/%(title)s.%(ext)s',
+        'cookiefile': 'cookies.txt', # <--- AÑADE ESTA LÍNEA
     }
 
     if format_type == 'mp3':
