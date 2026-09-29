@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Descargador Pro</title>
+    <style>
+        body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background: #f0f2f5; margin: 0; }
+        .card { background: white; padding: 2rem; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); text-align: center; width: 400px; }
+        input { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
+        select { width: 100%; padding: 10px; margin: 10px 0; border-radius: 5px; }
+        button { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; width: 100%; font-size: 16px; }
+        button:disabled { background: #ccc; }
+        #status { margin-top: 15px; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2>Descargador Pro</h2>
+        <p>YouTube, SoundCloud y más</p>
+        <input type="text" id="url" placeholder="Pega el enlace aquí...">
+        <select id="format">
+            <option value="mp4">Video (MP4)</option>
+            <option value="mp3">Audio (MP3)</option>
+        </select>
+        <button id="btn">Descargar</button>
+        <div id="status"></div>
+    </div>
+
+    <script>
+        document.getElementById('btn').onclick = async () => {
+            const url = document.getElementById('url').value;
+            const format = document.getElementById('format').value;
+            const status = document.getElementById('status');
+            const btn = document.getElementById('btn');
+
+            if(!url) return alert("Pon un link");
+
+            status.innerText = "Procesando... por favor espera.";
+            btn.disabled = true;
+
+            try {
+                const response = await fetch('/download', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ url, format })
+                });
+
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const downloadUrl = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = downloadUrl;
+                    a.download = `archivo.${format}`;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    status.innerText = "¡Descarga completada!";
+                } else {
+                    status.innerText = "Error al descargar. Verifica el link.";
+                }
+            } catch (e) {
+                status.innerText = "Error de conexión.";
+            } finally {
+                btn.disabled = false;
+            }
+        };
+    </script>
+</body>
+</html>
