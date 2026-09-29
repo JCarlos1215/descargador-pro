@@ -21,8 +21,18 @@ def download():
     if not url:
         return jsonify({'error': 'Por favor ingresa una URL'}), 400
 
+    # CONFIGURACIÓN AVANZADA PARA EVITAR EL BLOQUEO DE BOT
     ydl_opts = {
         'outtmpl': f'{DOWNLOAD_FOLDER}/%(title)s.%(ext)s',
+        'cookiefile': 'cookies.txt', # Sigue intentando usar cookies si existen
+        'quiet': True,
+        'no_warnings': True,
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['android', 'web'], # Simula ser un Android
+            }
+        },
+        'user_agent': 'Mozilla/5.0 (Linux; Android 13; SM-S901B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36',
     }
 
     if format_type == 'mp3':
@@ -49,6 +59,7 @@ def download():
 
         return send_file(filename, as_attachment=True)
     except Exception as e:
+        print(f"ERROR DETECTADO: {str(e)}") # Esto saldrá en los logs de Render
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
