@@ -3,13 +3,32 @@ import shutil
 import tempfile
 from collections import deque
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, unquote
 
 from flask import Flask, jsonify, render_template, request, send_file
 import yt_dlp
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024
+
+
+class DownloadConfigurationError(Exception):
+    pass
+
+
+def configured_proxy():
+    proxy = os.environ.get('YTDLP_PROXY', '').strip()
+    if not proxy:
+        return None
+    try:
+        parsed = urlsplit(proxy)
+        if (parsed.scheme not in ('http', 'https', 'socks5', 'socks5h')
+                or not parsed.hostname or not parsed.port
+                or parsed.path not in ('', '/') or parsed.query or parsed.fragment):
+            raise ValueError
+    except ValueError:
+        raise DownloadConfigurationError('Revisa YTDLP_PROXY en Render: usa una URL de proxy con host y puerto.') from None
+    return proxy
 
 
 @app.get('/')
@@ -25,22 +44,39 @@ def health():
 class DownloadLogger:
     """Keep provider warnings per request: the final exception can hide them."""
 
-    def __init__(self):
+    def __init__(self, proxy=None):
         self.warnings = deque(maxlen=20)
+        self.secrets = []
+        if proxy:
+            parsed = urlsplit(proxy)
+            self.secrets = [proxy, parsed.netloc, parsed.username, parsed.password,
+                            unquote(parsed.password or '')]
+
+    def redact(self, message):
+        text = str(message)
+        for secret in self.secrets:
+            if secret:
+                text = text.replace(secret, '[redacted]')
+        return text
 
     def debug(self, message):
-        app.logger.debug('%s', message)
+        app.logger.debug('%s', self.redact(message))
 
     def warning(self, message):
-        self.warnings.append(str(message))
+        message = self.redact(message)
+        self.warnings.append(message)
         app.logger.warning('%s', message)
 
     def error(self, message):
-        app.logger.error('%s', message)
+        app.logger.error('%s', self.redact(message))
 
 
 def download_error(error, warnings=()):
     message = '\n'.join([str(error), *warnings]).lower()
+    if '407' in message or 'proxy authentication' in message:
+        return 'El proxy rechazó la autenticación. El administrador debe revisar sus credenciales en Render.'
+    if 'unable to connect to proxy' in message or 'proxyerror' in message:
+        return 'No se pudo conectar al proxy de descargas. El administrador debe revisar su configuración en Render.'
     if 'http error 429' in message or 'too many requests' in message:
         return 'El sitio está limitando las solicitudes desde este servidor (429). Espera antes de reintentar. Si persiste, el administrador debe revisar el acceso desde Render.'
     if any(text in message for text in ('not a bot', 'confirm you’re', "confirm you're", 'sign in', 'login required')):
@@ -73,12 +109,16 @@ def download():
         return jsonify(error='Ingresa un enlace HTTP o HTTPS válido.'), 400
     if format_type not in ('mp3', 'mp4'):
         return jsonify(error='Selecciona MP3 o MP4.'), 400
+    try:
+        proxy = configured_proxy()
+    except DownloadConfigurationError as error:
+        return jsonify(error=str(error)), 503
     if not shutil.which('ffmpeg'):
         app.logger.error('FFmpeg no está instalado')
         return jsonify(error='Falta FFmpeg en el servidor. El administrador debe actualizar el despliegue.'), 503
 
     workdir = Path(tempfile.mkdtemp(prefix='descargador-'))
-    logger = DownloadLogger()
+    logger = DownloadLogger(proxy)
     try:
         options = {
             'logger': logger,
@@ -88,6 +128,8 @@ def download():
             'retries': 2,
             'js_runtimes': {'deno': {}},
         }
+        if proxy:
+            options['proxy'] = proxy
         # A private copy allows yt-dlp to update cookies without modifying a
         # read-only Render secret or sharing a cookie jar between requests.
         cookiefile = os.environ.get('YTDLP_COOKIE_FILE')
@@ -118,10 +160,10 @@ def download():
         response.call_on_close(lambda: shutil.rmtree(workdir, ignore_errors=True))
         return response
     except yt_dlp.utils.DownloadError as error:
-        app.logger.exception('El proveedor rechazó la descarga')
-        message, code = download_error(error, logger.warnings), 502
-    except Exception:
-        app.logger.exception('Fallo al procesar la descarga')
+        app.logger.error('El proveedor rechazó la descarga: %s', logger.redact(error))
+        message, code = download_error(logger.redact(error), logger.warnings), 502
+    except Exception as error:
+        app.logger.error('Fallo al procesar la descarga (%s): %s', type(error).__name__, logger.redact(error))
         message, code = 'Error interno al procesar la descarga. Revisa los registros del servidor.', 500
     shutil.rmtree(workdir, ignore_errors=True)
     return jsonify(error=message), code

@@ -40,3 +40,23 @@ python3 -m venv .venv
 
 Las pruebas simulan el proveedor externo y verifican validación, respuestas,
 archivos MP3/MP4 y limpieza. No certifican el acceso a YouTube desde Render.
+
+## Mantener la página pública en Render con un proxy privado
+
+La URL pública y el procesamiento siguen en Render. La variable opcional
+`YTDLP_PROXY` configura la salida de red de yt-dlp para obtener los metadatos y
+los archivos. No se acepta un proxy enviado por los visitantes de la página.
+
+1. Disponer de un proxy privado que permita conexiones HTTPS y el tráfico de
+   las descargas. Confirmar su cuota y coste de transferencia con el proveedor.
+2. En Render → servicio → Environment, añadir `YTDLP_PROXY` con la URL facilitada
+   por el proveedor: `http://USUARIO:CONTRASENA@HOST:PUERTO` (ejemplo sin datos
+   reales). También se admiten `https`, `socks5` y `socks5h`. Los caracteres
+   especiales del usuario y la contraseña deben codificarse para una URL.
+3. Guardar y desplegar; probar una descarga MP3 corta desde la página pública.
+   Un 407 indica credenciales incorrectas; un 429/403 puede indicar que YouTube
+   también rechaza esa salida de red. Un proxy no garantiza acceso.
+4. Para desactivar esta configuración, eliminar `YTDLP_PROXY` y desplegar otra vez.
+
+Guardar el valor solamente en Render, nunca en GitHub ni en el navegador de los
+visitantes. Esta integración no contrata ni activa ningún proveedor por sí sola.

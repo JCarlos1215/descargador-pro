@@ -70,5 +70,29 @@ class DownloadTests(unittest.TestCase):
             self.assertFalse(Path(factory.call_args.args[0]['outtmpl']).parent.exists())
 
 
+class ProxyTests(unittest.TestCase):
+    def test_configuration(self):
+        for value in ('', 'http://user:secret@proxy.example:8080', 'socks5h://proxy.example:1080'):
+            with patch.dict('os.environ', {'YTDLP_PROXY': value}):
+                self.assertEqual(module.configured_proxy(), value or None)
+        for value in ('invalid', 'http://proxy.example:bad', 'http://proxy.example', 'file:///tmp/proxy'):
+            with patch.dict('os.environ', {'YTDLP_PROXY': value}):
+                response = module.app.test_client().post('/download', json={'url': 'https://example.com/video', 'format': 'mp3'})
+                self.assertEqual(response.status_code, 503)
+                self.assertNotIn(value, response.json['error'])
+
+    @patch('app.shutil.which', return_value='/usr/bin/ffmpeg')
+    def test_proxy_forwarding_and_secret_redaction(self, _):
+        proxy = 'http://test-user:secret-password@proxy.example:8080'
+        with patch.dict('os.environ', {'YTDLP_PROXY': proxy}), patch('app.yt_dlp.YoutubeDL') as factory:
+            factory.return_value.__enter__.return_value.extract_info.side_effect = DownloadError(f'HTTP Error 407: Proxy Authentication Required {proxy}')
+            with self.assertLogs(module.app.logger) as logs:
+                response = module.app.test_client().post('/download', json={'url': 'https://example.com/video', 'format': 'mp3'})
+            self.assertEqual(factory.call_args.args[0]['proxy'], proxy)
+            self.assertIn('autenticación', response.json['error'])
+            self.assertNotIn('secret-password', str(logs.output) + response.text)
+            self.assertNotIn('test-user', str(logs.output) + response.text)
+
+
 if __name__ == '__main__':
     unittest.main()
