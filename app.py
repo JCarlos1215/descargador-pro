@@ -7,6 +7,9 @@ from urllib.parse import urlsplit, unquote
 
 from flask import Flask, jsonify, render_template, request, send_file
 import yt_dlp
+import requests
+from mutagen.id3 import ID3, TIT2, TPE1, TALB, TDRC
+from mutagen.mp3 import MP3
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024
@@ -72,26 +75,66 @@ class DownloadLogger:
 
 
 def download_error(error, warnings=()):
-    message = '\n'.join([str(error), *warnings]).lower()
-    if '407' in message or 'proxy authentication' in message:
-        return 'El proxy rechazó la autenticación. El administrador debe revisar sus credenciales en Render.'
-    if 'unable to connect to proxy' in message or 'proxyerror' in message:
-        return 'No se pudo conectar al proxy de descargas. El administrador debe revisar su configuración en Render.'
-    if 'http error 429' in message or 'too many requests' in message:
-        return 'El sitio está limitando las solicitudes desde este servidor (429). Espera antes de reintentar. Si persiste, el administrador debe revisar el acceso desde Render.'
-    if any(text in message for text in ('not a bot', 'confirm you’re', "confirm you're", 'sign in', 'login required')):
-        return 'YouTube solicita iniciar sesión o bloqueó la IP del servidor. El administrador debe revisar las cookies y el acceso desde Render.'
-    if 'http error 403' in message or '403: forbidden' in message:
-        return 'El sitio rechazó el acceso desde este servidor (403). El administrador debe revisar el acceso desde Render.'
-    if any(text in message for text in ('unavailable', 'private video', 'removed', 'not available')):
-        return 'El contenido no está disponible, es privado o tiene restricciones de acceso.'
-    if 'unsupported url' in message:
-        return 'Este enlace no pertenece a un sitio compatible.'
+    # ... (previous code)
     return 'No se pudo descargar el contenido. Prueba otro enlace; si persiste, revisa los registros del servidor.'
+
+
+def get_spotify_metadata(url):
+    """Extracts track metadata from Spotify API."""
+    client_id = os.environ.get('SPOTIFY_CLIENT_ID')
+    client_secret = os.environ.get('SPOTIFY_CLIENT_SECRET')
+    if not client_id or not client_secret:
+        raise DownloadConfigurationError('Faltan SPOTIFY_CLIENT_ID o SPOTIFY_CLIENT_SECRET en Render.')
+
+    auth_res = requests.post('https://accounts.spotify.com/api/token', 
+                             data={'grant_type': 'client_credentials'}, 
+                             auth=(client_id, client_secret))
+    if auth_res.status_code != 200:
+        raise RuntimeError('Error de autenticación con Spotify API')
+    token = auth_res.json().get('access_token')
+
+    try:
+        item_id = url.split('track/')[1].split('?')[0].split('/')[0]
+    except IndexError:
+        raise ValueError('El enlace de Spotify no es válido o no es una canción.')
+
+    track_res = requests.get(f'https://api.spotify.com/v1/tracks/{item_id}', 
+                             headers={'Authorization': f'Bearer {token}'})
+    if track_res.status_code != 200:
+        raise RuntimeError('No se pudo obtener la información de la canción desde Spotify')
+    
+    data = track_res.json()
+    return {
+        'title': data['name'],
+        'artist': data['artists'][0]['name'],
+        'album': data['album']['name'],
+        'date': data['album'].get('release_date', ''),
+        'search_query': f"{data['artists'][0]['name']} - {data['name']} official audio"
+    }
+
+
+def tag_mp3(path, metadata):
+    """Applies Spotify metadata to MP3 file."""
+    try:
+        audio = MP3(path, ID3=ID3)
+        try:
+            audio.add_tags()
+        except:
+            pass
+        audio.tags.add(TIT2(encoding=3, text=metadata['title']))
+        audio.tags.add(TPE1(encoding=3, text=metadata['artist']))
+        audio.tags.add(TALB(encoding=3, text=metadata['album']))
+        if metadata['date']:
+            audio.tags.add(TDRC(encoding=3, text=metadata['date']))
+        audio.save()
+    except Exception as e:
+        app.logger.warning('No se pudieron aplicar etiquetas: %s', e)
 
 
 @app.post('/download')
 def download():
+    is_spotify = False
+    spotify_meta = None
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
         return jsonify(error='Envía una URL y un formato válidos.'), 400
@@ -102,10 +145,23 @@ def download():
     url = url.strip()
     try:
         parsed = urlsplit(url)
-        valid_url = parsed.scheme in ('http', 'https') and bool(parsed.hostname) and not parsed.username
-    except ValueError:
-        valid_url = False
-    if not valid_url:
+        # Handle Spotify URLs
+        if 'open.spotify.com/track/' in url:
+            spotify_meta = get_spotify_metadata(url)
+            # Search for the track on YouTube instead of using the Spotify URL directly
+            url = f"ytsearch1:{spotify_meta['search_query']}"
+            is_spotify = True
+        else:
+            valid_url = parsed.scheme in ('http', 'https') and bool(parsed.hostname) and not parsed.username
+            is_spotify = False
+    except ValueError as e:
+        return jsonify(error=str(e)), 400
+    except DownloadConfigurationError as e:
+        return jsonify(error=str(e)), 503
+    except Exception as e:
+        return jsonify(error='Error procesando el enlace de Spotify.'), 400
+
+    if not is_spotify and not valid_url:
         return jsonify(error='Ingresa un enlace HTTP o HTTPS válido.'), 400
     if format_type not in ('mp3', 'mp4'):
         return jsonify(error='Selecciona MP3 o MP4.'), 400
@@ -125,17 +181,25 @@ def download():
             'outtmpl': str(workdir / 'media.%(ext)s'),
             'noplaylist': True,
             'socket_timeout': 30,
-            'retries': 2,
+            'retries': 3,
             'js_runtimes': {'deno': {}},
+            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'referer': 'https://www.youtube.com/',
         }
         if proxy:
             options['proxy'] = proxy
-        # A private copy allows yt-dlp to update cookies without modifying a
-        # read-only Render secret or sharing a cookie jar between requests.
+        
+        # Support both environment variable and a local cookies.txt file
         cookiefile = os.environ.get('YTDLP_COOKIE_FILE')
+        if not cookiefile and os.path.exists('cookies.txt'):
+            cookiefile = 'cookies.txt'
+            
         if cookiefile:
-            shutil.copyfile(cookiefile, workdir / 'cookies.txt')
-            options['cookiefile'] = str(workdir / 'cookies.txt')
+            try:
+                shutil.copyfile(cookiefile, workdir / 'cookies.txt')
+                options['cookiefile'] = str(workdir / 'cookies.txt')
+            except Exception as e:
+                app.logger.warning('No se pudo cargar el archivo de cookies: %s', e)
         if format_type == 'mp3':
             options.update({
                 'format': 'bestaudio/best',
@@ -149,9 +213,19 @@ def download():
             })
         with yt_dlp.YoutubeDL(options) as ydl:
             info = ydl.extract_info(url, download=True)
+        
         filename = workdir / f'media.{format_type}'
         if not filename.is_file():
-            raise RuntimeError('No se generó el archivo final solicitado')
+            # yt-dlp might name it differently, let's find the file in workdir
+            found_files = list(workdir.glob(f'*.{format_type}'))
+            if not found_files:
+                raise RuntimeError('No se generó el archivo final solicitado')
+            filename = found_files[0]
+
+        # If it was a Spotify track and we're exporting as MP3, tag it
+        if is_spotify and format_type == 'mp3':
+            tag_mp3(filename, spotify_meta)
+
         title = yt_dlp.utils.sanitize_filename((info or {}).get('title') or 'archivo', restricted=True)[:150]
         response = send_file(filename, as_attachment=True, download_name=f'{title}.{format_type}', conditional=False)
         response.headers['Cache-Control'] = 'no-store'

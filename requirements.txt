@@ -1,3 +1,7 @@
 Flask>=3.1,<4
 yt-dlp[default]>=2026.6.9
+Flask>=3.1,<4
+yt-dlp[default]>=2026.6.9
 gunicorn>=23,<24
+requests
+mutagen
