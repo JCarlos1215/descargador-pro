@@ -218,8 +218,8 @@
                 } else {
                     const error = await response.json().catch(() => null);
                     let msg = error?.error || "Error desconocido";
-                    if (msg.includes("verificar la sesión") || msg.includes("sign in") || msg.includes("blocked")) {
-                        msg = "YouTube bloqueó la descarga. El servidor necesita cookies actualizadas para continuar.";
+                    if (msg.toLowerCase().includes("verificar") || msg.toLowerCase().includes("sign in") || msg.toLowerCase().includes("blocked")) {
+                        msg = "La plataforma requiere verificación desde el servidor. Esta descarga no puede continuar.";
                     }
                     status.innerText = "✕ " + (response.status === 504
                         ? "El servidor tardó demasiado. Intenta con un archivo más corto."

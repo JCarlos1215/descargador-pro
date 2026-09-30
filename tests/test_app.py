@@ -48,6 +48,8 @@ class DownloadTests(unittest.TestCase):
         for warning, expected in (
             ('Unable to download webpage: HTTP Error 429: Too Many Requests', '(429)'),
             ('Unable to download API page: HTTP Error 403: Forbidden', '(403)'),
+            ('Vimeo web client only works when logged-in', 'iniciar sesión'),
+            ('Tunnel connection failed: 403 Forbidden', 'proxy seguro'),
         ):
             with self.subTest(warning=warning), patch('app.yt_dlp.YoutubeDL') as factory:
                 def extract(url, download):
@@ -57,7 +59,7 @@ class DownloadTests(unittest.TestCase):
                 factory.return_value.__enter__.return_value.extract_info.side_effect = extract
                 response = self.client.post('/download', json={'url': 'https://example.com/video', 'format': 'mp3'})
                 self.assertEqual(response.status_code, 502)
-                self.assertIn(expected, response.json['error'])
+                self.assertIn(expected.lower(), response.json['error'].lower())
                 self.assertFalse(Path(factory.call_args.args[0]['outtmpl']).parent.exists())
         self.assertNotIn('(429)', module.download_error('Failed to extract any player response'))
 

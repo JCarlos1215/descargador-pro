@@ -78,10 +78,14 @@ def download_error(error, warnings=()):
     detail = ' '.join([str(error), *(str(warning) for warning in warnings)]).lower()
     if '407' in detail or 'proxy authentication required' in detail:
         return 'El proxy rechazó la autenticación. Revisa sus credenciales y vuelve a intentar.'
+    if 'tunnel connection failed: 403' in detail:
+        return 'El proxy seguro no permite ese dominio. Usa una plataforma compatible y un enlace público.'
     if '429' in detail or 'too many requests' in detail:
         return 'La plataforma limitó las solicitudes (429). Espera y vuelve a intentar más tarde.'
     if 'sign in to confirm' in detail or 'not a bot' in detail:
         return 'La plataforma exige una verificación para la IP del servidor. Esta descarga no puede continuar.'
+    if 'only works when logged-in' in detail or 'requires account' in detail or 'requires login' in detail:
+        return 'La plataforma requiere iniciar sesión. Este servicio solo procesa contenido público sin cuentas.'
     if '403' in detail or 'forbidden' in detail:
         return 'La plataforma rechazó la solicitud (403). Comprueba que el contenido sea público y accesible.'
     return 'No se pudo descargar el contenido. Comprueba el enlace y vuelve a intentar; consulta los registros del servidor si persiste.'
