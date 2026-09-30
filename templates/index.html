@@ -60,6 +60,14 @@
             backdrop-filter: blur(10px);
         }
 
+        .brand-logo {
+            display: block;
+            width: min(100%, 340px);
+            height: 250px;
+            object-fit: contain;
+            margin: 0 auto 0.5rem;
+        }
+
         h2 { 
             font-size: 1.8rem; 
             font-weight: 700; 
@@ -159,7 +167,7 @@
 </head>
 <body>
     <div class="card">
-        <h2>BPM Studio</h2>
+        <img class="brand-logo" src="{{ url_for('static', filename='logo.png') }}" alt="Off The Wall">
         <p>Descargador de Audio y Video Profesional</p>
         
         <div class="input-group">
