@@ -4,7 +4,7 @@ Estado: preparado para desplegar; verificar una descarga antes de conectar Rende
 
 Crear un servicio desde este repositorio, con contexto de compilación en la raíz
 y `RAILWAY_DOCKERFILE_PATH=proxy/cloud/Dockerfile`. Configurar una clave aleatoria
-de 64 caracteres hexadecimales en `WSTUNNEL_RESTRICT_HTTP_UPGRADE_PATH_PREFIX`.
+de 64 caracteres hexadecimales en `WSTUNNEL_HTTP_UPGRADE_PATH_PREFIX`.
 No guardarla en Git. Exponer el puerto 8080 mediante un dominio HTTPS de Railway.
 
 El contenedor corre como usuario `proxy`. Squid solo escucha en loopback;
