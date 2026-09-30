@@ -9,7 +9,10 @@ No guardarla en Git. Exponer el puerto 8080 mediante un dominio HTTPS de Railway
 
 El contenedor corre como usuario `proxy`. Squid solo escucha en loopback;
 wstunnel exige la clave y solo puede conectar al puerto local de Squid.
-Squid limita los destinos a HTTPS de YouTube y SoundCloud y rechaza redes privadas.
+Squid limita los destinos a HTTPS de plataformas públicas compatibles y algunos
+CDN explícitos; rechaza redes privadas, puertos no HTTPS y cualquier dominio fuera
+de la lista. No es un proxy abierto ni evita verificaciones o restricciones de las
+plataformas.
 Railway termina TLS; el cliente debe validar el certificado del dominio público.
 
 Después de probar el túnel, configurar Render con:
@@ -24,5 +27,8 @@ YTDLP_PROXY=http://127.0.0.1:13128
 con esta dirección las conexiones salen desde Railway y no desde la Mac.
 
 El plan Free incluye un crédito mensual limitado: no garantiza actividad continua.
-No contratar Hobby para este despliegue. YouTube puede rechazar la IP del servidor;
-en ese caso conservar la configuración anterior de Render.
+No contratar Hobby para este despliegue. El proxy permite HTTPS a YouTube,
+SoundCloud, Vimeo, TikTok, Twitch, Dailymotion, Reddit, Facebook, Instagram, X,
+Streamable, Rumble, Bandcamp, Mixcloud, Archive.org, Kick y Odysee, incluidos
+dominios CDN conocidos. Las plataformas pueden seguir rechazando solicitudes;
+el proxy no elude verificaciones ni restricciones.

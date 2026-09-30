@@ -38,6 +38,7 @@ class DownloadTests(unittest.TestCase):
                 self.assertEqual(response.status_code, 200)
                 self.assertEqual(response.data, b'media content')
                 self.assertIn(f'.{extension}', response.headers['Content-Disposition'])
+                self.assertNotIn('cookiefile', factory.call_args.args[0])
                 self.assertTrue(directory.exists())
                 response.close()
                 self.assertFalse(directory.exists())
@@ -71,6 +72,13 @@ class DownloadTests(unittest.TestCase):
 
 
 class ProxyTests(unittest.TestCase):
+    def test_cloud_proxy_allows_supported_public_platforms(self):
+        config = (Path(module.__file__).parent / 'proxy/cloud/squid.conf').read_text()
+        for domain in ('.youtube.com', '.youtubei.googleapis.com', '.googlevideo.com', '.soundcloud.com', '.vimeo.com', '.tiktok.com', '.twitch.tv', '.dailymotion.com', '.reddit.com', '.bandcamp.com', '.mixcloud.com', '.archive.org', '.kick.com', '.odysee.com'):
+            with self.subTest(domain=domain):
+                self.assertIn(domain, config)
+        self.assertNotIn('0.0.0.0/0', config)
+
     def test_configuration(self):
         for value in ('', 'http://user:secret@proxy.example:8080', 'socks5h://proxy.example:1080'):
             with patch.dict('os.environ', {'YTDLP_PROXY': value}):

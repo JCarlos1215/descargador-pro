@@ -11,16 +11,10 @@ El servidor escucha en `PORT` (10000 por defecto). La ruta de salud es `/health`
 Tras subir los cambios al repositorio conectado, ejecutar un nuevo despliegue.
 Si Render conserva dependencias antiguas, reconstruir sin caché.
 
-Las cookies son opcionales: configurar `YTDLP_COOKIE_FILE` con la ruta de un
-archivo privado de cookies en formato Netscape (por ejemplo
-`/etc/secrets/cookies.txt`). La aplicación no usa el antiguo `cookies.txt` del
-repositorio ni lo copia a la imagen. Si ese archivo contiene sesiones reales y
-ya se publicó en Git, cerrar esas sesiones y retirar el archivo del historial.
-`.gitignore` no elimina archivos previamente versionados.
-
-YouTube puede rechazar la IP del alojamiento o exigir una sesión. Ni una
-actualización de yt-dlp ni las cookies garantizan acceso desde Render. La página
-muestra el tipo de fallo y los detalles técnicos se registran en el servidor.
+El servidor no usa cookies de sesión ni accede a contenido que requiera iniciar
+sesión. Si una plataforma exige verificación, bloquea el alojamiento o restringe
+el contenido, la descarga se detiene; el proxy no evita esos controles. Descarga
+solo material público que tengas derecho a guardar.
 
 ## Desarrollo
 

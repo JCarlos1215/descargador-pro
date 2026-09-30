@@ -75,8 +75,16 @@ class DownloadLogger:
 
 
 def download_error(error, warnings=()):
-    # ... (previous code)
-    return 'No se pudo descargar el contenido. Prueba otro enlace; si persiste, revisa los registros del servidor.'
+    detail = ' '.join([str(error), *(str(warning) for warning in warnings)]).lower()
+    if '407' in detail or 'proxy authentication required' in detail:
+        return 'El proxy rechazó la autenticación. Revisa sus credenciales y vuelve a intentar.'
+    if '429' in detail or 'too many requests' in detail:
+        return 'La plataforma limitó las solicitudes (429). Espera y vuelve a intentar más tarde.'
+    if 'sign in to confirm' in detail or 'not a bot' in detail:
+        return 'La plataforma exige una verificación para la IP del servidor. Esta descarga no puede continuar.'
+    if '403' in detail or 'forbidden' in detail:
+        return 'La plataforma rechazó la solicitud (403). Comprueba que el contenido sea público y accesible.'
+    return 'No se pudo descargar el contenido. Comprueba el enlace y vuelve a intentar; consulta los registros del servidor si persiste.'
 
 
 def get_spotify_metadata(url):
@@ -183,23 +191,10 @@ def download():
             'socket_timeout': 30,
             'retries': 3,
             'js_runtimes': {'deno': {}},
-            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'referer': 'https://www.youtube.com/',
         }
         if proxy:
             options['proxy'] = proxy
         
-        # Support both environment variable and a local cookies.txt file
-        cookiefile = os.environ.get('YTDLP_COOKIE_FILE')
-        if not cookiefile and os.path.exists('cookies.txt'):
-            cookiefile = 'cookies.txt'
-            
-        if cookiefile:
-            try:
-                shutil.copyfile(cookiefile, workdir / 'cookies.txt')
-                options['cookiefile'] = str(workdir / 'cookies.txt')
-            except Exception as e:
-                app.logger.warning('No se pudo cargar el archivo de cookies: %s', e)
         if format_type == 'mp3':
             options.update({
                 'format': 'bestaudio/best',
