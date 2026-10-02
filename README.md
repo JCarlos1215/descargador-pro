@@ -1,28 +1,32 @@
 # Descargador Pro
 
-Aplicación Flask para descargar un archivo de audio MP3 o video MP4 mediante yt-dlp y FFmpeg.
+Aplicación Flask para descargar archivos MP3 y MP4 utilizando yt-dlp y FFmpeg.
 
-## Render
+## Características
 
-Desplegar como servicio Docker usando el Dockerfile incluido. Incluye Python 3.12,
-FFmpeg, Deno y yt-dlp con los scripts EJS necesarios para YouTube.
-El servidor escucha en `PORT` (10000 por defecto). La ruta de salud es `/health`.
+- **Descarga directa**: Soporta MP3 y MP4 desde YouTube y otras fuentes.
+- **Backend en Flask**: Servidor ligero que gestiona las solicitudes de descarga.
+- **Integración yt-dlp**: Extrae metadatos y descarga archivos de manera eficiente.
+- **FFmpeg integrado**: Convierte y procesa los archivos descargados si es necesario.
+- **Despliegue con Docker**: Arquitectura lista para desplegar en contenedores.
+- **Configuración flexible**: Variable `YTDLP_PROXY` para controlar el proxy de red.
 
-Tras subir los cambios al repositorio conectado, ejecutar un nuevo despliegue.
-Si Render conserva dependencias antiguas, reconstruir sin caché.
+## Tecnologías
 
-El servidor no usa cookies de sesión ni accede a contenido que requiera iniciar
-sesión. Si una plataforma exige verificación, bloquea el alojamiento o restringe
-el contenido, la descarga se detiene; el proxy no evita esos controles. Descarga
-solo material público que tengas derecho a guardar.
+- **Python 3.12**
+- **Flask** (framework web)
+- **yt-dlp** (descarga de medios)
+- **FFmpeg** (procesamiento de vídeo/audio)
+- **Docker** (contenedores)
 
-## Desarrollo
-
-Instalar Python 3.12+, FFmpeg y Deno 2.3+ disponibles en PATH.
+## Configuración
 
 ```sh
+# Crear entorno virtual
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
+
+# Ejecutar la aplicación
 .venv/bin/python app.py
 ```
 
@@ -32,25 +36,18 @@ python3 -m venv .venv
 .venv/bin/python -m unittest discover -s tests -v
 ```
 
-Las pruebas simulan el proveedor externo y verifican validación, respuestas,
-archivos MP3/MP4 y limpieza. No certifican el acceso a YouTube desde Render.
+## Despliegue
 
-## Mantener la página pública en Render con un proxy privado
+Desplegar como servicio Docker. El servidor escucha en `PORT` (por defecto 10000) y tiene una ruta de salud `/health`.
 
-La URL pública y el procesamiento siguen en Render. La variable opcional
-`YTDLP_PROXY` configura la salida de red de yt-dlp para obtener los metadatos y
-los archivos. No se acepta un proxy enviado por los visitantes de la página.
+## Página Pública
 
-1. Disponer de un proxy privado que permita conexiones HTTPS y el tráfico de
-   las descargas. Confirmar su cuota y coste de transferencia con el proveedor.
-2. En Render → servicio → Environment, añadir `YTDLP_PROXY` con la URL facilitada
-   por el proveedor: `http://USUARIO:CONTRASENA@HOST:PUERTO` (ejemplo sin datos
-   reales). También se admiten `https`, `socks5` y `socks5h`. Los caracteres
-   especiales del usuario y la contraseña deben codificarse para una URL.
-3. Guardar y desplegar; probar una descarga MP3 corta desde la página pública.
-   Un 407 indica credenciales incorrectas; un 429/403 puede indicar que YouTube
-   también rechaza esa salida de red. Un proxy no garantiza acceso.
-4. Para desactivar esta configuración, eliminar `YTDLP_PROXY` y desplegar otra vez.
+Mantener la URL pública en Render con un proxy privado configurado para `YTDLP_PROXY`.
 
-Guardar el valor solamente en Render, nunca en GitHub ni en el navegador de los
-visitantes. Esta integración no contrata ni activa ningún proveedor por sí sola.
+### Mejoras futuras
+
+- Agregar soporte para más formatos de archivo.
+- Implementar interfaz gráfica simple para mejor experiencia de usuario.
+- Añadir logging detallado para depuración.
+- Optimizar rendimiento con caché de metadatos.
+- Documentar más escenarios de uso en la documentación.
